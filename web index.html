@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinTrack - Personal Finance Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for transaction list */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+
+    <!-- Mobile Top Header (Brand) -->
+    <header class="md:hidden fixed top-0 left-0 w-full bg-white/95 backdrop-blur-sm shadow-sm z-40 border-b border-gray-200 h-16 flex items-center justify-center">
+        <div class="flex items-center">
+            <i class="fa-solid fa-wallet text-indigo-600 text-2xl mr-2"></i>
+            <h1 class="text-xl font-bold text-gray-900">FinTrack</h1>
+        </div>
+    </header>
+
+    <!-- Navigation (Bottom on Mobile, Top on Desktop) -->
+    <nav class="bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:shadow-sm z-50 fixed bottom-0 w-full border-t border-gray-100 md:sticky md:top-0 md:bottom-auto md:border-t-0 transition-all">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                
+                <!-- Desktop Logo -->
+                <div class="hidden md:flex items-center">
+                    <i class="fa-solid fa-wallet text-indigo-600 text-2xl mr-2"></i>
+                    <h1 class="text-xl font-bold text-gray-900">FinTrack</h1>
+                </div>
+                
+                <!-- Controls -->
+                <div class="flex w-full md:w-auto items-center justify-around md:justify-end md:space-x-4">
+                    
+                    <!-- Add Transaction Shortcut (Mobile) -->
+                    <button onclick="document.getElementById('transaction-form').scrollIntoView({behavior: 'smooth'})" class="md:hidden flex flex-col items-center justify-center text-gray-400 hover:text-indigo-600 transition-colors group w-16">
+                        <i class="fa-solid fa-circle-plus text-2xl mb-1 group-hover:scale-110 transition-transform"></i>
+                        <span class="text-[10px] font-medium">Add</span>
+                    </button>
+
+                    <!-- Excel Export -->
+                    <button onclick="app.exportExcel()" class="flex flex-col md:flex-row items-center justify-center text-gray-500 md:text-white md:bg-green-600 md:px-4 md:py-2 md:rounded-lg md:hover:bg-green-700 md:shadow-sm transition-all group w-16 md:w-auto">
+                        <i class="fa-solid fa-file-excel text-2xl md:text-sm md:mr-2 mb-1 md:mb-0 group-hover:text-green-600 md:group-hover:text-white transition-colors"></i>
+                        <span class="text-[10px] md:text-sm font-medium group-hover:text-green-600 md:group-hover:text-white">Excel</span>
+                    </button>
+
+                    <!-- Reset Data -->
+                    <button onclick="app.resetData()" class="flex flex-col md:flex-row items-center justify-center text-gray-500 md:text-red-500 hover:text-red-600 md:hover:bg-red-50 md:px-3 md:py-2 md:rounded-lg transition-all group w-16 md:w-auto">
+                        <i class="fa-solid fa-trash-can text-2xl md:text-sm md:mr-2 mb-1 md:mb-0 group-hover:text-red-600"></i>
+                        <span class="text-[10px] md:text-sm font-medium group-hover:text-red-600">Reset</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="dashboard-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24 pb-24 md:pt-8 md:pb-8">
+        
+        <!-- Dashboard Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Total Balance -->
+            <div class="bg-white overflow-hidden shadow rounded-xl border border-gray-100">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-indigo-50 rounded-md p-3">
+                            <i class="fa-solid fa-scale-balanced text-indigo-600 text-xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Total Balance</dt>
+                                <dd class="flex items-baseline">
+                                    <div class="text-2xl font-semibold text-gray-900" id="total-balance">₹0.00</div>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Income -->
+            <div class="bg-white overflow-hidden shadow rounded-xl border border-gray-100">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-green-50 rounded-md p-3">
+                            <i class="fa-solid fa-arrow-trend-up text-green-600 text-xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Total Income</dt>
+                                <dd class="flex items-baseline">
+                                    <div class="text-2xl font-semibold text-green-600" id="total-income">₹0.00</div>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expenses -->
+            <div class="bg-white overflow-hidden shadow rounded-xl border border-gray-100">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-red-50 rounded-md p-3">
+                            <i class="fa-solid fa-arrow-trend-down text-red-600 text-xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Total Expenses</dt>
+                                <dd class="flex items-baseline">
+                                    <div class="text-2xl font-semibold text-red-600" id="total-expense">₹0.00</div>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Input & History (Col span 1) -->
+            <div class="lg:col-span-1 space-y-8">
+                
+                <!-- Add Transaction Form -->
+                <div class="bg-white shadow rounded-xl p-6 border border-gray-100">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Add Transaction</h2>
+                    <form id="transaction-form" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Type</label>
+                            <div class="mt-1 flex rounded-md shadow-sm">
+                                <button type="button" id="btn-type-expense" class="w-1/2 py-2 px-4 border border-gray-300 rounded-l-md text-sm font-medium text-white bg-red-500 hover:bg-red-600 focus:z-10 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors">Expense</button>
+                                <button type="button" id="btn-type-income" class="w-1/2 py-2 px-4 border border-l-0 border-gray-300 rounded-r-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:z-10 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors">Income</button>
+                            </div>
+                            <input type="hidden" id="type" value="expense">
+                        </div>
+
+                        <div>
+                            <label for="amount" class="block text-sm font-medium text-gray-700">Amount</label>
+                            <div class="mt-1 relative rounded-md shadow-sm">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <span class="text-gray-500 sm:text-sm">₹</span>
+                                </div>
+                                <input type="number" name="amount" id="amount" min="0.01" step="0.01" required class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md py-2 border" placeholder="0.00">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
+                            <select id="category" name="category" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border">
+                                <!-- Populated by JS based on type -->
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="date" class="block text-sm font-medium text-gray-700">Date</label>
+                            <input type="date" name="date" id="date" required class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 border">
+                        </div>
+
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                            <input type="text" name="description" id="description" class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 border" placeholder="Grocery shopping, Salary, etc.">
+                        </div>
+
+                        <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Add Transaction
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Transaction History -->
+                <div class="bg-white shadow rounded-xl border border-gray-100 flex flex-col h-[500px]">
+                    <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                        <h2 class="text-lg font-medium text-gray-900">History</h2>
+                        <div class="relative inline-block text-left">
+                            <select id="filter-category" class="text-sm border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-1 border">
+                                <option value="all">All Categories</option>
+                                <!-- Populated by JS -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2" id="transaction-list">
+                        <!-- Transactions populated here -->
+                        <div class="text-center text-gray-500 mt-10">No transactions yet.</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Visualizations & Budgets (Col span 2) -->
+            <div class="lg:col-span-2 space-y-8">
+                
+                <!-- Monthly Trend Chart -->
+                <div class="bg-white shadow rounded-xl p-6 border border-gray-100">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Monthly Trends (Income vs Expense)</h2>
+                    <div class="relative h-64 w-full">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Expense Breakdown Pie Chart -->
+                    <div class="bg-white shadow rounded-xl p-6 border border-gray-100">
+                        <h2 class="text-lg font-medium text-gray-900 mb-4">Expense Breakdown</h2>
+                        <div class="relative h-64 w-full flex justify-center">
+                            <canvas id="expenseChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Budget Progress -->
+                    <div class="bg-white shadow rounded-xl p-6 border border-gray-100">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-medium text-gray-900">Budget Limits</h2>
+                            <button id="edit-budgets-btn" class="text-sm text-indigo-600 hover:text-indigo-800">Edit Limits</button>
+                        </div>
+                        <div id="budget-container" class="space-y-5 overflow-y-auto max-h-64 custom-scrollbar pr-2">
+                            <!-- Budget bars populated here -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Edit Modal -->
+    <div id="budget-modal" class="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Set Monthly Category Budgets</h3>
+            <div id="budget-form-container" class="space-y-3 max-h-96 overflow-y-auto custom-scrollbar mb-4">
+                <!-- Inputs generated here -->
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="close-budget-modal" class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Cancel</button>
+                <button id="save-budgets" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Application Logic ---
+
+        const app = {
+            data: {
+                transactions: [],
+                budgets: {
+                    'Food': 5000,
+                    'Housing': 15000,
+                    'Transport': 3000,
+                    'Entertainment': 2000,
+                    'Utilities': 3000,
+                    'Health': 2000,
+                    'Shopping': 5000,
+                    'Other': 1000
+                }
+            },
+            charts: {
+                trend: null,
+                expense: null
+            },
+            categories: {
+                expense: ['Food', 'Housing', 'Transport', 'Entertainment', 'Utilities', 'Health', 'Shopping', 'Other'],
+                income: ['Salary', 'Freelance', 'Investments', 'Gift', 'Other']
+            },
+            
+            init() {
+                this.loadData();
+                this.setupEventListeners();
+                this.renderAll();
+                
+                // Set date input to today
+                document.getElementById('date').valueAsDate = new Date();
+            },
+
+            loadData() {
+                const storedData = localStorage.getItem('finTrackData');
+                if (storedData) {
+                    const parsed = JSON.parse(storedData);
+                    this.data.transactions = parsed.transactions || [];
+                    if (parsed.budgets) {
+                        this.data.budgets = { ...this.data.budgets, ...parsed.budgets };
+                    }
+                } else {
+                    // Initialize with empty data
+                    this.data.transactions = [];
+                    this.saveData();
+                }
+            },
+
+            saveData() {
+                localStorage.setItem('finTrackData', JSON.stringify(this.data));
+            },
+
+            resetData() {
+                if(confirm('Are you sure you want to reset all data? This cannot be undone.')) {
+                    localStorage.removeItem('finTrackData');
+                    location.reload();
+                }
+            },
+
+            exportExcel() {
+                if (this.data.transactions.length === 0) {
+                    alert("No data to export!");
+                    return;
+                }
+
+                // Prepare data for Excel
+                const dataToExport = this.data.transactions.map(t => ({
+                    ID: t.id,
+                    Date: t.date,
+                    Type: t.type.charAt(0).toUpperCase() + t.type.slice(1),
+                    Category: t.category,
+                    Description: t.description,
+                    Amount: t.amount
+                }));
+
+                // Create worksheet
+                const ws = XLSX.utils.json_to_sheet(dataToExport);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+
+                // Save file
+                XLSX.writeFile(wb, "FinTrack_Data.xlsx");
+            },
+
+            setupEventListeners() {
+                // Transaction Type Toggle
+                const expenseBtn = document.getElementById('btn-type-expense');
+                const incomeBtn = document.getElementById('btn-type-income');
+                const typeInput = document.getElementById('type');
+                const categorySelect = document.getElementById('category');
+
+                const setType = (type) => {
+                    typeInput.value = type;
+                    if (type === 'expense') {
+                        expenseBtn.classList.remove('bg-white', 'text-gray-700');
+                        expenseBtn.classList.add('bg-red-500', 'text-white', 'ring-red-500');
+                        incomeBtn.classList.remove('bg-green-500', 'text-white', 'ring-green-500');
+                        incomeBtn.classList.add('bg-white', 'text-gray-700');
+                        this.populateCategories('expense');
+                    } else {
+                        incomeBtn.classList.remove('bg-white', 'text-gray-700');
+                        incomeBtn.classList.add('bg-green-500', 'text-white', 'ring-green-500');
+                        expenseBtn.classList.remove('bg-red-500', 'text-white', 'ring-red-500');
+                        expenseBtn.classList.add('bg-white', 'text-gray-700');
+                        this.populateCategories('income');
+                    }
+                };
+
+                expenseBtn.addEventListener('click', () => setType('expense'));
+                incomeBtn.addEventListener('click', () => setType('income'));
+
+                // Initialize categories
+                this.populateCategories('expense');
+
+                // Form Submit
+                document.getElementById('transaction-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.addTransaction();
+                });
+
+                // Filter Change
+                document.getElementById('filter-category').addEventListener('change', () => {
+                    this.renderHistory();
+                });
+
+                // Budget Modal
+                document.getElementById('edit-budgets-btn').addEventListener('click', () => {
+                    this.openBudgetModal();
+                });
+                document.getElementById('close-budget-modal').addEventListener('click', () => {
+                    document.getElementById('budget-modal').classList.add('hidden');
+                });
+                document.getElementById('save-budgets').addEventListener('click', () => {
+                    this.saveBudgets();
+                });
+            },
+
+            populateCategories(type) {
+                const select = document.getElementById('category');
+                select.innerHTML = '';
+                this.categories[type].forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    select.appendChild(option);
+                });
+            },
+
+            addTransaction() {
+                const form = document.getElementById('transaction-form');
+                const type = document.getElementById('type').value;
+                const amount = parseFloat(document.getElementById('amount').value);
+                const category = document.getElementById('category').value;
+                const date = document.getElementById('date').value;
+                const description = document.getElementById('description').value;
+
+                const transaction = {
+                    id: Date.now(),
+                    type,
+                    amount,
+                    category,
+                    date,
+                    description
+                };
+
+                this.data.transactions.push(transaction);
+                // Sort by date descending
+                this.data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                this.saveData();
+                this.renderAll();
+                
+                form.reset();
+                // Reset defaults
+                document.getElementById('date').valueAsDate = new Date();
+                document.getElementById('type').value = type; // keep previous type active visually, though form reset might clear hidden input, let's fix toggle state
+                if (type === 'expense') {
+                     document.getElementById('btn-type-expense').click();
+                } else {
+                     document.getElementById('btn-type-income').click();
+                }
+            },
+
+            deleteTransaction(id) {
+                if(confirm('Delete this transaction?')) {
+                    this.data.transactions = this.data.transactions.filter(t => t.id !== id);
+                    this.saveData();
+                    this.renderAll();
+                }
+            },
+
+            renderAll() {
+                this.renderSummary();
+                this.renderHistory();
+                this.renderCharts();
+                this.renderBudgets();
+                this.populateFilterOptions();
+            },
+
+            populateFilterOptions() {
+                const filterSelect = document.getElementById('filter-category');
+                const currentVal = filterSelect.value;
+                // Keep "All"
+                filterSelect.innerHTML = '<option value="all">All Categories</option>';
+                
+                // Get all unique categories used in history plus default expense categories
+                const usedCategories = new Set([...this.categories.expense, ...this.categories.income]);
+                
+                Array.from(usedCategories).sort().forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    filterSelect.appendChild(option);
+                });
+                filterSelect.value = currentVal;
+            },
+
+            renderSummary() {
+                const income = this.data.transactions
+                    .filter(t => t.type === 'income')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                
+                const expense = this.data.transactions
+                    .filter(t => t.type === 'expense')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                
+                const balance = income - expense;
+
+                document.getElementById('total-income').textContent = `₹${income.toFixed(2)}`;
+                document.getElementById('total-expense').textContent = `₹${expense.toFixed(2)}`;
+                document.getElementById('total-balance').textContent = `₹${balance.toFixed(2)}`;
+            },
+
+            renderHistory() {
+                const list = document.getElementById('transaction-list');
+                const filter = document.getElementById('filter-category').value;
+                
+                list.innerHTML = '';
+
+                const filtered = this.data.transactions.filter(t => {
+                    if (filter === 'all') return true;
+                    return t.category === filter;
+                });
+
+                if (filtered.length === 0) {
+                    list.innerHTML = '<div class="text-center text-gray-500 mt-10">No transactions found.</div>';
+                    return;
+                }
+
+                filtered.forEach(t => {
+                    const isIncome = t.type === 'income';
+                    const el = document.createElement('div');
+                    el.className = 'flex items-center justify-between p-3 mb-2 bg-white border border-gray-100 rounded-lg hover:shadow-sm transition-shadow';
+                    
+                    el.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 rounded-full ${isIncome ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}">
+                                <i class="fa-solid ${isIncome ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">${t.category}</p>
+                                <p class="text-xs text-gray-500">${t.description || 'No description'} • ${t.date}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="font-semibold ${isIncome ? 'text-green-600' : 'text-red-600'}">
+                                ${isIncome ? '+' : '-'}₹${t.amount.toFixed(2)}
+                            </span>
+                            <button onclick="app.deleteTransaction(${t.id})" class="text-gray-400 hover:text-red-500 transition-colors">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    `;
+                    list.appendChild(el);
+                });
+            },
+
+            renderBudgets() {
+                const container = document.getElementById('budget-container');
+                container.innerHTML = '';
+
+                // Calculate expenses per category for current month
+                const currentMonth = new Date().getMonth();
+                const currentYear = new Date().getFullYear();
+
+                const expensesByCategory = {};
+                
+                this.data.transactions.forEach(t => {
+                    // Parse local date manually to avoid timezone shifts
+                    const [y, m, d] = t.date.split('-').map(Number);
+                    if (t.type === 'expense' && m - 1 === currentMonth && y === currentYear) {
+                        expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
+                    }
+                });
+
+                // Render bars for categories present in budgets
+                Object.keys(this.data.budgets).forEach(cat => {
+                    const limit = this.data.budgets[cat];
+                    const spent = expensesByCategory[cat] || 0;
+                    const percent = Math.min((spent / limit) * 100, 100);
+                    
+                    let color = 'bg-indigo-600';
+                    if (percent > 80) color = 'bg-yellow-500';
+                    if (percent >= 100) color = 'bg-red-500';
+
+                    const el = document.createElement('div');
+                    el.innerHTML = `
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-gray-700">${cat}</span>
+                            <span class="text-sm font-medium text-gray-500">₹${spent.toFixed(0)} / ₹${limit}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="${color} h-2.5 rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+                        </div>
+                    `;
+                    container.appendChild(el);
+                });
+            },
+
+            openBudgetModal() {
+                const container = document.getElementById('budget-form-container');
+                container.innerHTML = '';
+                
+                Object.keys(this.data.budgets).forEach(cat => {
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = `
+                        <label class="block text-xs font-medium text-gray-700">${cat}</label>
+                        <div class="mt-1 relative rounded-md shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-gray-500 sm:text-xs">₹</span>
+                            </div>
+                            <input type="number" data-cat="${cat}" value="${this.data.budgets[cat]}" class="budget-input focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-7 sm:text-sm border-gray-300 rounded-md py-1 border">
+                        </div>
+                    `;
+                    container.appendChild(wrapper);
+                });
+                
+                document.getElementById('budget-modal').classList.remove('hidden');
+            },
+
+            saveBudgets() {
+                const inputs = document.querySelectorAll('.budget-input');
+                inputs.forEach(input => {
+                    const cat = input.getAttribute('data-cat');
+                    const val = parseFloat(input.value);
+                    if (val && val > 0) {
+                        this.data.budgets[cat] = val;
+                    }
+                });
+                this.saveData();
+                this.renderBudgets(); // Re-render budgets
+                document.getElementById('budget-modal').classList.add('hidden');
+            },
+
+            renderCharts() {
+                // Prepare Data for Expense Breakdown (Pie)
+                const expensesByCat = {};
+                this.data.transactions.forEach(t => {
+                    if (t.type === 'expense') {
+                        expensesByCat[t.category] = (expensesByCat[t.category] || 0) + t.amount;
+                    }
+                });
+
+                const pieData = {
+                    labels: Object.keys(expensesByCat),
+                    datasets: [{
+                        data: Object.values(expensesByCat),
+                        backgroundColor: [
+                            '#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#64748b'
+                        ],
+                        borderWidth: 1
+                    }]
+                };
+
+                if (this.charts.expense) this.charts.expense.destroy();
+                this.charts.expense = new Chart(document.getElementById('expenseChart'), {
+                    type: 'doughnut',
+                    data: pieData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+
+                // Prepare Data for Monthly Trends (Bar/Line)
+                // Group by Month-Year
+                const monthlyData = {};
+                
+                // Sort transactions ascending for chart
+                const sortedTx = [...this.data.transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                sortedTx.forEach(t => {
+                    const [y, m] = t.date.split('-').map(Number);
+                    const dateObj = new Date(y, m - 1, 1);
+                    const key = dateObj.toLocaleString('default', { month: 'short', year: 'numeric' });
+                    
+                    if (!monthlyData[key]) monthlyData[key] = { income: 0, expense: 0 };
+                    
+                    if (t.type === 'income') monthlyData[key].income += t.amount;
+                    else monthlyData[key].expense += t.amount;
+                });
+
+                const labels = Object.keys(monthlyData);
+                const incomeData = labels.map(k => monthlyData[k].income);
+                const expenseData = labels.map(k => monthlyData[k].expense);
+
+                if (this.charts.trend) this.charts.trend.destroy();
+                this.charts.trend = new Chart(document.getElementById('trendChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Income',
+                                data: incomeData,
+                                backgroundColor: '#22c55e',
+                                borderRadius: 4
+                            },
+                            {
+                                label: 'Expense',
+                                data: expenseData,
+                                backgroundColor: '#ef4444',
+                                borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+        };
+
+        // Init App
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+
+    </script>
+</body>
+</html>
